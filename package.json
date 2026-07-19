@@ -8,6 +8,7 @@
     "check": "node --check src/index.js && node --check src/config.js && node --check src/firebase.js && node --check src/whatsapp.js && node --check src/deliveries.js && node --check src/formatters.js && node --check src/commands.js && node --check src/access.js && node --check src/queries.js && node --check src/time.js"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
     "firebase-admin": "^13.6.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.2"
