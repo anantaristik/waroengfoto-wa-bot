@@ -33,6 +33,13 @@ client.on("message", (message) => {
   });
 });
 
+client.on("message_create", (message) => {
+  if (!message.fromMe) return;
+  handleIncomingMessage(message).catch((error) => {
+    console.error("Failed to handle outgoing message", error);
+  });
+});
+
 client.initialize().catch((error) => {
   console.error("Failed to initialize WhatsApp client", error);
   process.exitCode = 1;

@@ -79,6 +79,11 @@ async function senderPhone(message) {
   return normalizeSenderId(message.from);
 }
 
+async function canAccessMessageCommand(message, commandKey) {
+  if (message.fromMe) return { ok: true, source: "self" };
+  return canRunCommand(await senderPhone(message), commandKey);
+}
+
 export async function handleIncomingMessage(message) {
   const rawText = normalizeBody(message.body);
   if (!rawText.startsWith("/")) return;
@@ -96,7 +101,7 @@ export async function handleIncomingMessage(message) {
   }
 
   if (command === "/register") {
-    const access = await canRunCommand(await senderPhone(message), commandKey);
+    const access = await canAccessMessageCommand(message, commandKey);
     if (!access.ok) {
       await message.reply("Nomor kamu belum punya akses untuk register grup bot.");
       return;
@@ -110,7 +115,7 @@ export async function handleIncomingMessage(message) {
     return;
   }
 
-  const access = await canRunCommand(await senderPhone(message), commandKey);
+  const access = await canAccessMessageCommand(message, commandKey);
   if (!access.ok) {
     await message.reply("Nomor kamu belum punya akses command bot.");
     return;
@@ -125,4 +130,3 @@ export async function handleIncomingMessage(message) {
     await message.reply(await listTodayCustomFrames());
   }
 }
-
