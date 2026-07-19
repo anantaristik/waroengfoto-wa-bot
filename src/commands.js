@@ -34,7 +34,7 @@ function helpText() {
 }
 
 async function registerGroup(message) {
-  const chat = await message.getChat();
+  const chat = await getMessageChat(message);
   if (!chat.isGroup) return "Command /register hanya untuk grup.";
 
   const db = getDb();
@@ -56,8 +56,11 @@ async function registerGroup(message) {
 }
 
 async function syncGroupInbox(message, rawText) {
-  const chat = await message.getChat();
-  if (!chat.isGroup) return;
+  const chatId = getMessageChatId(message);
+  if (!chatId.endsWith("@g.us")) return;
+
+  const chat = await getMessageChat(message);
+  if (!chat?.isGroup) return;
 
   const db = getDb();
   await db.collection("wa_bot_groups").doc(chat.id._serialized).set(
@@ -77,6 +80,18 @@ async function syncGroupInbox(message, rawText) {
 async function senderPhone(message) {
   if (message.author) return normalizeSenderId(message.author);
   return normalizeSenderId(message.from);
+}
+
+function getMessageChatId(message) {
+  return String(message.fromMe ? message.to : message.from || "");
+}
+
+async function getMessageChat(message) {
+  const chatId = getMessageChatId(message);
+  if (message.fromMe && chatId && message.client?.getChatById) {
+    return message.client.getChatById(chatId);
+  }
+  return message.getChat();
 }
 
 async function canAccessMessageCommand(message, commandKey) {
