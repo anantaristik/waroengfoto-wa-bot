@@ -53,3 +53,8 @@ export async function sendPrivateMessage(client, phone, message) {
   return client.sendMessage(`${normalized}@c.us`, message);
 }
 
+export async function sendGroupMessage(client, groupId, message) {
+  const target = String(groupId || "").trim();
+  if (!target.endsWith("@g.us")) throw new Error("Target grup WhatsApp tidak valid");
+  return client.sendMessage(target, message);
+}

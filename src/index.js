@@ -1,10 +1,13 @@
 import { CONFIG } from "./config.js";
+import { startApiServer } from "./api.js";
 import { handleIncomingMessage } from "./commands.js";
 import { processPendingDeliveries } from "./deliveries.js";
 import { createWhatsAppClient } from "./whatsapp.js";
 
 const client = createWhatsAppClient();
 let loopStarted = false;
+
+startApiServer();
 
 async function runLoop() {
   if (loopStarted) return;

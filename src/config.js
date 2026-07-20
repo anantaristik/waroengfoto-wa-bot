@@ -1,6 +1,8 @@
 import "dotenv/config";
 
 export const CONFIG = {
+  apiPort: Number(process.env.WA_BOT_API_PORT || 3020),
+  apiToken: process.env.WA_BOT_API_TOKEN || "",
   pollIntervalMs: Number(process.env.WA_POLL_INTERVAL_MS || 5000),
   maxAttempts: Number(process.env.WA_MAX_ATTEMPTS || 3),
   sessionPath: process.env.WA_SESSION_PATH || "/var/lib/waroengfoto-wa-bot/session",

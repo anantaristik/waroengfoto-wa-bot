@@ -27,22 +27,16 @@ function getCommandKey(command, arg) {
 
 function helpText() {
   return [
-    "Command Bot Waroeng Foto",
+    "Waroeng Foto Bot siap bantu.",
     "",
-    "/bk today",
-    "List booking studio hari ini",
+    "Command yang tersedia:",
+    "/bk today - lihat booking studio hari ini",
+    "/cf today - lihat custom frame hari ini",
+    "/cf next - lihat 10 custom frame selanjutnya",
+    "/cf-detail-[kode] - buka detail custom frame dari kode ID",
+    "/register - daftarkan grup ini sebagai tujuan bot",
     "",
-    "/cf today",
-    "List custom frame hari ini",
-    "",
-    "/cf next",
-    "List 10 custom frame selanjutnya",
-    "",
-    "/cf-detail-[kode]",
-    "Detail custom frame dari kode ID di list",
-    "",
-    "/help",
-    "Lihat command",
+    "Akses command dibatasi untuk nomor staf yang sudah diizinkan.",
   ].join("\n");
 }
 
@@ -123,29 +117,23 @@ export async function handleIncomingMessage(message) {
   const arg = argRaw.toLowerCase();
   const commandKey = getCommandKey(command, arg);
 
+  const access = await canAccessMessageCommand(message, commandKey);
+  if (!access.ok) {
+    return;
+  }
+
   if (command === "/help") {
     await message.reply(helpText());
     return;
   }
 
   if (command === "/register") {
-    const access = await canAccessMessageCommand(message, commandKey);
-    if (!access.ok) {
-      await message.reply("Nomor kamu belum punya akses untuk register grup bot.");
-      return;
-    }
     await message.reply(await registerGroup(message));
     return;
   }
 
   if (commandKey === "unknown") {
-    await message.reply("Command belum dikenal. Gunakan /help.");
-    return;
-  }
-
-  const access = await canAccessMessageCommand(message, commandKey);
-  if (!access.ok) {
-    await message.reply("Nomor kamu belum punya akses command bot.");
+    await message.reply("Command belum dikenal. Ketik /help untuk melihat daftar command yang aktif.");
     return;
   }
 
