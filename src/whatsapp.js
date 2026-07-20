@@ -20,6 +20,7 @@ export function createWhatsAppClient() {
     }),
     puppeteer: {
       headless: true,
+      timeout: 120000,
       protocolTimeout: 120000,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     },
