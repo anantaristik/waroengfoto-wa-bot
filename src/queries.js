@@ -112,19 +112,26 @@ function compactCustomFrameLine(item, index, suffixByCode) {
   const customer = item.namaPemesan || item.customerName || "-";
   const branch = item.branchCode || item.branchName || item.branchId || "-";
   const product = item.productTitle || item.ukuranFrame || item.productId || "-";
+  const schedule = [formatDateLongID(customFrameDate(item)), formatArrivalTime(item.perkiraanJamKedatangan || item.startTime)]
+    .filter((value) => value && value !== "-")
+    .join(", ");
+
   return [
-    `${index + 1}. ${title}, ${customer}, ${branch}`,
-    `${formatArrivalTime(item.perkiraanJamKedatangan || item.startTime)}, ${product}`,
-    `Progres: ${customFrameStatus(item)}`,
-    `${customFrameMethod(item)}, ${customFrameExpressLabel(item)}`,
-    `ID: ${shortCode}`,
+    `${index + 1}. [${shortCode}] ${title}`,
+    `   Customer: ${customer}`,
+    `   Cabang: ${branch}`,
+    `   Jadwal: ${schedule || "-"}`,
+    `   Produk: ${product}`,
+    `   Tipe: ${customFrameMethod(item)}, ${customFrameExpressLabel(item)}`,
+    `   Progres: ${customFrameStatus(item)}`,
+    `   Detail: /cf-detail-${shortCode}`,
   ].join("\n");
 }
 
 function formatCustomFrameList(title, items) {
   if (!items.length) return `${title}\n\nBelum ada custom frame.`;
   const suffixByCode = uniqueSuffixes(items);
-  return [title, "", ...items.map((item, index) => compactCustomFrameLine(item, index, suffixByCode))].join("\n\n");
+  return [`*${title}*`, `Total: ${items.length} request`, "", ...items.map((item, index) => compactCustomFrameLine(item, index, suffixByCode))].join("\n\n");
 }
 
 function sortCustomFrames(items) {
@@ -248,7 +255,7 @@ export async function listTodayCustomFrames() {
 
   const items = sortCustomFrames(Array.from(byId.values()));
 
-  return formatCustomFrameList(`Custom Frame ${formatDateLongID(today)}`, items);
+  return formatCustomFrameList(`Custom Frame Hari Ini - ${formatDateLongID(today)}`, items);
 }
 
 export async function listUpcomingCustomFrames() {
@@ -262,7 +269,7 @@ export async function listUpcomingCustomFrames() {
     .get();
   const items = sortCustomFrames(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
 
-  return formatCustomFrameList(`10 Custom Frame Selanjutnya dari ${formatDateLongID(today)}`, items);
+  return formatCustomFrameList(`Custom Frame Selanjutnya - mulai ${formatDateLongID(today)}`, items);
 }
 
 export async function getCustomFrameDetailBySuffix(rawSuffix) {
