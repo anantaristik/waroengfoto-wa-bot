@@ -85,8 +85,21 @@ async function syncGroupInbox(message, rawText) {
 }
 
 async function senderPhone(message) {
-  if (message.author) return normalizeSenderId(message.author);
-  return normalizeSenderId(message.from);
+  const phones = await senderPhones(message);
+  return phones[0] || "";
+}
+
+async function senderPhones(message) {
+  const values = [message.author, message.from];
+
+  try {
+    const contact = await message.getContact();
+    values.unshift(contact?.number, contact?.id?.user);
+  } catch (error) {
+    console.error("Failed to resolve WhatsApp contact", error);
+  }
+
+  return Array.from(new Set(values.map(normalizeSenderId).filter(Boolean)));
 }
 
 function getMessageChatId(message) {
@@ -103,7 +116,13 @@ async function getMessageChat(message) {
 
 async function canAccessMessageCommand(message, commandKey) {
   if (message.fromMe) return { ok: true, source: "self" };
-  return canRunCommand(await senderPhone(message), commandKey);
+
+  const phones = await senderPhones(message);
+  for (const phone of phones) {
+    const access = await canRunCommand(phone, commandKey);
+    if (access.ok) return access;
+  }
+  return { ok: false, reason: "not_allowed", phones };
 }
 
 export async function handleIncomingMessage(message) {
@@ -116,12 +135,12 @@ export async function handleIncomingMessage(message) {
   const command = commandRaw.toLowerCase();
   const arg = argRaw.toLowerCase();
   const commandKey = getCommandKey(command, arg);
-  const sender = message.fromMe ? "self" : await senderPhone(message);
-  console.log("WA command received", { command, arg, commandKey, sender, fromMe: Boolean(message.fromMe) });
+  const senders = message.fromMe ? ["self"] : await senderPhones(message);
+  console.log("WA command received", { command, arg, commandKey, senders, fromMe: Boolean(message.fromMe) });
 
   const access = await canAccessMessageCommand(message, commandKey);
   if (!access.ok) {
-    console.log("WA command ignored: sender not allowed", { command, commandKey, sender });
+    console.log("WA command ignored: sender not allowed", { command, commandKey, senders });
     return;
   }
 
