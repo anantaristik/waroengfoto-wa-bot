@@ -116,9 +116,12 @@ export async function handleIncomingMessage(message) {
   const command = commandRaw.toLowerCase();
   const arg = argRaw.toLowerCase();
   const commandKey = getCommandKey(command, arg);
+  const sender = message.fromMe ? "self" : await senderPhone(message);
+  console.log("WA command received", { command, arg, commandKey, sender, fromMe: Boolean(message.fromMe) });
 
   const access = await canAccessMessageCommand(message, commandKey);
   if (!access.ok) {
+    console.log("WA command ignored: sender not allowed", { command, commandKey, sender });
     return;
   }
 

@@ -6,6 +6,7 @@ import { createWhatsAppClient } from "./whatsapp.js";
 
 const client = createWhatsAppClient();
 let loopStarted = false;
+const handledMessages = new Set();
 
 startApiServer();
 
@@ -30,18 +31,23 @@ client.on("ready", () => {
   });
 });
 
-client.on("message", (message) => {
-  handleIncomingMessage(message).catch((error) => {
-    console.error("Failed to handle incoming message", error);
-  });
-});
+function messageKey(message) {
+  return message.id?._serialized || message.id?.id || `${message.from || ""}:${message.to || ""}:${message.timestamp || ""}:${message.body || ""}`;
+}
 
-client.on("message_create", (message) => {
-  if (!message.fromMe) return;
+function handleMessageEvent(message, label) {
+  const key = messageKey(message);
+  if (handledMessages.has(key)) return;
+  handledMessages.add(key);
+  setTimeout(() => handledMessages.delete(key), 5 * 60 * 1000).unref?.();
+
   handleIncomingMessage(message).catch((error) => {
-    console.error("Failed to handle outgoing message", error);
+    console.error(`Failed to handle ${label} message`, error);
   });
-});
+}
+
+client.on("message", (message) => handleMessageEvent(message, "incoming"));
+client.on("message_create", (message) => handleMessageEvent(message, "created"));
 
 client.initialize().catch((error) => {
   console.error("Failed to initialize WhatsApp client", error);
