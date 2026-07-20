@@ -47,7 +47,10 @@ function handleMessageEvent(message, label) {
 }
 
 client.on("message", (message) => handleMessageEvent(message, "incoming"));
-client.on("message_create", (message) => handleMessageEvent(message, "created"));
+client.on("message_create", (message) => {
+  if (!message.fromMe) return;
+  handleMessageEvent(message, "created");
+});
 
 client.initialize().catch((error) => {
   console.error("Failed to initialize WhatsApp client", error);

@@ -129,7 +129,11 @@ export async function handleIncomingMessage(message) {
   const rawText = normalizeBody(message.body);
   if (!rawText.startsWith("/")) return;
 
-  await syncGroupInbox(message, rawText);
+  try {
+    await syncGroupInbox(message, rawText);
+  } catch (error) {
+    console.error("Failed to sync WhatsApp group inbox", error);
+  }
 
   const [commandRaw, argRaw = ""] = rawText.split(" ");
   const command = commandRaw.toLowerCase();
