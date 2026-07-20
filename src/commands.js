@@ -1,6 +1,11 @@
 import { canRunCommand } from "./access.js";
 import { FieldValue, getDb } from "./firebase.js";
-import { listTodayBookings, listTodayCustomFrames } from "./queries.js";
+import {
+  getCustomFrameDetailBySuffix,
+  listTodayBookings,
+  listTodayCustomFrames,
+  listUpcomingCustomFrames,
+} from "./queries.js";
 
 function normalizeBody(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
@@ -13,6 +18,8 @@ function normalizeSenderId(value) {
 function getCommandKey(command, arg) {
   if (command === "/bk" && arg === "today") return "booking:list";
   if (command === "/cf" && arg === "today") return "custom_frame:list";
+  if (command === "/cf" && ["next", "upcoming", "soon"].includes(arg)) return "custom_frame:list";
+  if (command.startsWith("/cf-detail-")) return "custom_frame:list";
   if (command === "/help") return "help";
   if (command === "/register") return "group:register";
   return "unknown";
@@ -27,6 +34,12 @@ function helpText() {
     "",
     "/cf today",
     "List custom frame hari ini",
+    "",
+    "/cf next",
+    "List 10 custom frame selanjutnya",
+    "",
+    "/cf-detail-[kode]",
+    "Detail custom frame dari kode ID di list",
     "",
     "/help",
     "Lihat command",
@@ -142,6 +155,15 @@ export async function handleIncomingMessage(message) {
   }
 
   if (commandKey === "custom_frame:list") {
+    if (command.startsWith("/cf-detail-")) {
+      const code = commandRaw.slice("/cf-detail-".length);
+      await message.reply(await getCustomFrameDetailBySuffix(code));
+      return;
+    }
+    if (["next", "upcoming", "soon"].includes(arg)) {
+      await message.reply(await listUpcomingCustomFrames());
+      return;
+    }
     await message.reply(await listTodayCustomFrames());
   }
 }
