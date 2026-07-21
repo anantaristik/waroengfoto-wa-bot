@@ -243,19 +243,23 @@ export async function listTodayBookings() {
 }
 
 export async function listTodayCustomFrames() {
-  const db = getDb();
   const today = getTodayInTimezone();
+  return listCustomFramesByDate(today, `Custom Frame Hari Ini - ${formatDateLongID(today)}`);
+}
+
+export async function listCustomFramesByDate(date, title = `Custom Frame - ${formatDateLongID(date)}`) {
+  const db = getDb();
   const fields = ["tanggalPemakaian", "bookingDate", "date"];
   const byId = new Map();
 
   for (const field of fields) {
-    const snap = await db.collection(CUSTOM_FRAME_COLLECTION).where(field, "==", today).limit(20).get();
+    const snap = await db.collection(CUSTOM_FRAME_COLLECTION).where(field, "==", date).limit(20).get();
     snap.docs.forEach((doc) => byId.set(doc.id, { id: doc.id, ...doc.data() }));
   }
 
   const items = sortCustomFrames(Array.from(byId.values()));
 
-  return formatCustomFrameList(`Custom Frame Hari Ini - ${formatDateLongID(today)}`, items);
+  return formatCustomFrameList(title, items);
 }
 
 export async function listUpcomingCustomFrames() {

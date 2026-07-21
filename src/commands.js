@@ -2,6 +2,7 @@ import { canRunCommand } from "./access.js";
 import { FieldValue, getDb } from "./firebase.js";
 import {
   getCustomFrameDetailBySuffix,
+  listCustomFramesByDate,
   listTodayBookings,
   listTodayCustomFrames,
   listUpcomingCustomFrames,
@@ -18,11 +19,29 @@ function normalizeSenderId(value) {
 function getCommandKey(command, arg) {
   if (command === "/bk" && arg === "today") return "booking:list";
   if (command === "/cf" && arg === "today") return "custom_frame:list";
+  if (command === "/cf" && /^\d{6}$/.test(arg)) return "custom_frame:list";
   if (command === "/cf" && ["next", "upcoming", "soon"].includes(arg)) return "custom_frame:list";
   if (command.startsWith("/cf-detail-")) return "custom_frame:list";
   if (command === "/help") return "help";
   if (command === "/register") return "group:register";
   return "unknown";
+}
+
+function parseDdmmyy(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (!match) return "";
+
+  const [, day, month, year] = match;
+  const fullYear = `20${year}`;
+  const date = new Date(Date.UTC(Number(fullYear), Number(month) - 1, Number(day)));
+  const isValid =
+    date.getUTCFullYear() === Number(fullYear) &&
+    date.getUTCMonth() === Number(month) - 1 &&
+    date.getUTCDate() === Number(day);
+  if (!isValid) return "";
+
+  return `${fullYear}-${month}-${day}`;
 }
 
 function helpText() {
@@ -33,6 +52,7 @@ function helpText() {
     "/bk today - lihat booking studio hari ini",
     "/cf today - lihat custom frame hari ini",
     "/cf next - lihat 10 custom frame selanjutnya",
+    "/cf ddmmyy - lihat custom frame di tanggal tertentu, contoh /cf 020626",
     "/cf-detail-[kode] - buka detail custom frame dari kode ID",
     "/register - daftarkan grup ini sebagai tujuan bot",
     "",
@@ -176,6 +196,15 @@ export async function handleIncomingMessage(message) {
     }
     if (["next", "upcoming", "soon"].includes(arg)) {
       await message.reply(await listUpcomingCustomFrames());
+      return;
+    }
+    if (/^\d{6}$/.test(arg)) {
+      const date = parseDdmmyy(arg);
+      if (!date) {
+        await message.reply("Format tanggal belum valid. Pakai /cf ddmmyy, contoh /cf 020626.");
+        return;
+      }
+      await message.reply(await listCustomFramesByDate(date));
       return;
     }
     await message.reply(await listTodayCustomFrames());
