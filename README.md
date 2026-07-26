@@ -8,7 +8,8 @@ Long-running WhatsAppWeb worker for Waroeng Foto operational automation.
 - Sends Booking Studio photo result links for event `studio_photo_result.send_whatsapp`.
 - Updates delivery status and `studio_bookings.photoResultWhatsappStatus`.
 - Handles command `/bk today` and `/cf today` for staff/admin numbers.
-- Registers groups with `/register` into `wa_bot_groups`.
+- Registers groups with `/register` into `wa_bot_groups` and enables default group notification routes.
+- Falls back to the latest registered group when a notification route has not been configured yet.
 
 ## Required Environment
 
@@ -20,7 +21,7 @@ Long-running WhatsAppWeb worker for Waroeng Foto operational automation.
 ## Commands
 
 - `/help`
-- `/register` in a group, by an allowed staff/admin number
+- `/register` in a group, by an allowed staff/admin number. This also enables `booking_settled` and `custom_frame_submitted` routes for that group.
 - `/bk today` lists today's Booking Studio bookings
 - `/cf today` lists today's Custom Frame requests
 

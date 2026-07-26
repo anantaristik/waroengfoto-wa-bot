@@ -9,6 +9,7 @@ import {
 
 const DELIVERY_COLLECTION = "wa_bot_deliveries";
 const ROUTE_COLLECTION = "wa_bot_notification_routes";
+const GROUP_COLLECTION = "wa_bot_groups";
 const BOOKING_COLLECTION = "studio_bookings";
 const CUSTOM_FRAME_COLLECTION = "custom_frame_requests";
 
@@ -59,6 +60,14 @@ function isPaymentVerified(data) {
   );
 }
 
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  if (typeof value === "number") return value;
+  return 0;
+}
+
 function authMiddleware(req, res, next) {
   if (!CONFIG.apiToken) {
     return res.status(503).json({ error: "WA_BOT_API_TOKEN belum dikonfigurasi" });
@@ -77,17 +86,33 @@ async function getRoute(routeKey) {
 
   const snap = await db.collection(ROUTE_COLLECTION).doc(routeKey).get();
   const data = snap.data() || {};
-  if (!data.enabled || !cleanString(data.groupId)) {
-    return { ok: false, status: "route_disabled", routeKey };
+  if (data.enabled && cleanString(data.groupId)) {
+    return {
+      ok: true,
+      routeKey,
+      eventType: route.eventType,
+      sourceType: route.sourceType,
+      groupId: cleanString(data.groupId),
+      groupName: cleanString(data.groupName),
+    };
   }
+
+  const groupsSnap = await db.collection(GROUP_COLLECTION).where("isRegistered", "==", true).limit(20).get();
+  const fallback = groupsSnap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data() || {} }))
+    .filter((item) => cleanString(item.data.groupId || item.id).endsWith("@g.us"))
+    .sort((a, b) => timestampMillis(b.data.lastSeenAt || b.data.updatedAt) - timestampMillis(a.data.lastSeenAt || a.data.updatedAt))[0];
+
+  if (!fallback) return { ok: false, status: "route_disabled", routeKey };
 
   return {
     ok: true,
     routeKey,
     eventType: route.eventType,
     sourceType: route.sourceType,
-    groupId: cleanString(data.groupId),
-    groupName: cleanString(data.groupName),
+    groupId: cleanString(fallback.data.groupId || fallback.id),
+    groupName: cleanString(fallback.data.groupName),
+    routeSource: "registered_group_fallback",
   };
 }
 

@@ -7,6 +7,10 @@ import {
   listTodayCustomFrames,
   listUpcomingCustomFrames,
 } from "./queries.js";
+import { AUTO_GROUP_ROUTES, buildGroupRegistrationWrites } from "./groupRegistration.js";
+
+const GROUP_COLLECTION = "wa_bot_groups";
+const ROUTE_COLLECTION = "wa_bot_notification_routes";
 
 function normalizeBody(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
@@ -65,21 +69,31 @@ async function registerGroup(message) {
   if (!chat.isGroup) return "Command /register hanya untuk grup.";
 
   const db = getDb();
-  await db.collection("wa_bot_groups").doc(chat.id._serialized).set(
-    {
-      groupId: chat.id._serialized,
-      groupName: chat.name || "",
-      participantCount: Array.isArray(chat.participants) ? chat.participants.length : null,
-      isRegistered: true,
-      lastCommand: "/register",
-      lastSeenAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp(),
-    },
+  const groupId = chat.id._serialized;
+  const groupName = chat.name || "";
+  const participantCount = Array.isArray(chat.participants) ? chat.participants.length : null;
+  const now = FieldValue.serverTimestamp();
+  const { groupData, routeWrites } = buildGroupRegistrationWrites({ groupId, groupName, participantCount }, now);
+
+  const batch = db.batch();
+  batch.set(
+    db.collection(GROUP_COLLECTION).doc(groupId),
+    groupData,
     { merge: true },
   );
 
-  return `Grup terdaftar: ${chat.name || chat.id._serialized}`;
+  for (const route of routeWrites) {
+    batch.set(
+      db.collection(ROUTE_COLLECTION).doc(route.routeKey),
+      route.data,
+      { merge: true },
+    );
+  }
+
+  await batch.commit();
+
+  const labels = AUTO_GROUP_ROUTES.map((route) => route.label).join(" dan ");
+  return `Grup terdaftar: ${groupName || groupId}. Notifikasi otomatis aktif untuk ${labels}.`;
 }
 
 async function syncGroupInbox(message, rawText) {
@@ -90,7 +104,7 @@ async function syncGroupInbox(message, rawText) {
   if (!chat?.isGroup) return;
 
   const db = getDb();
-  await db.collection("wa_bot_groups").doc(chat.id._serialized).set(
+  await db.collection(GROUP_COLLECTION).doc(chat.id._serialized).set(
     {
       groupId: chat.id._serialized,
       groupName: chat.name || "",

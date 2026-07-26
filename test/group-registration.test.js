@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildGroupRegistrationWrites } from "../src/groupRegistration.js";
+
+test("/register writes default notification routes for the group", () => {
+  const now = { sentinel: "serverTimestamp" };
+  const result = buildGroupRegistrationWrites(
+    {
+      groupId: "120363000000000000@g.us",
+      groupName: "WF Ops",
+      participantCount: 12,
+    },
+    now,
+  );
+
+  assert.equal(result.groupData.groupId, "120363000000000000@g.us");
+  assert.equal(result.groupData.isRegistered, true);
+  assert.equal(result.groupData.lastCommand, "/register");
+
+  const routes = new Map(result.routeWrites.map((route) => [route.routeKey, route.data]));
+  assert.deepEqual([...routes.keys()].sort(), ["booking_settled", "custom_frame_submitted"]);
+  assert.equal(routes.get("custom_frame_submitted").enabled, true);
+  assert.equal(routes.get("custom_frame_submitted").groupId, "120363000000000000@g.us");
+  assert.equal(routes.get("custom_frame_submitted").updatedBy, "/register");
+  assert.equal(routes.get("booking_settled").groupId, "120363000000000000@g.us");
+});
