@@ -3,6 +3,7 @@ import { CONFIG } from "./config.js";
 import { FieldValue, getDb } from "./firebase.js";
 import {
   buildBookingSettledGroupMessage,
+  buildCustomFrameRecapMessage,
   buildCustomFrameSubmittedGroupMessage,
   buildStudioPhotoResultMessage,
 } from "./formatters.js";
@@ -222,7 +223,7 @@ async function queueCustomFrameSubmitted(req, res) {
   if (!snap.exists) return res.status(404).json({ error: "Custom frame tidak ditemukan" });
 
   const item = snap.data() || {};
-  if (!item.buktiPembayaran) return res.status(400).json({ error: "Bukti pembayaran belum ada" });
+  if (!item.buktiPembayaran && !isCustomFramePaid(item)) return res.status(400).json({ error: "Custom frame belum paid/verified" });
 
   const payload = {
     requestId: snap.id,
@@ -238,7 +239,9 @@ async function queueCustomFrameSubmitted(req, res) {
     judulFrame: cleanString(item.judulFrame),
     metodeEdit: cleanString(item.metodeEdit),
     isExpress: Boolean(item.isExpress),
-    totalPrice: Number(item.totalPrice || 0),
+    totalPrice: Number(item.totalPrice || item.pakasirTotalPayment || 0),
+    pakasirTotalPayment: Number(item.pakasirTotalPayment || 0),
+    paymentStatus: cleanString(item.paymentStatus || (item.buktiPembayaran ? "payment_submitted" : "paid")),
   };
   const idempotencyKey = safeDocId(req.body?.idempotencyKey || snap.id);
   const deliveryId = `${route.eventType}:${idempotencyKey}`;
@@ -316,6 +319,74 @@ async function queueStudioResult(req, res) {
   return res.status(200).json({ ok: true, ...result });
 }
 
+function isCustomFramePaid(data) {
+  return ["paid", "settled", "confirmed", "completed"].includes(cleanString(data.paymentStatus).toLowerCase());
+}
+
+async function queueCustomFrameRecap(req, res) {
+  const db = getDb();
+  const requestId = cleanString(req.body?.requestId);
+  if (!requestId) return res.status(400).json({ error: "requestId wajib diisi" });
+
+  const snap = await db.collection(CUSTOM_FRAME_COLLECTION).doc(requestId).get();
+  if (!snap.exists) return res.status(404).json({ error: "Custom frame tidak ditemukan" });
+
+  const item = snap.data() || {};
+  if (!isCustomFramePaid(item)) return res.status(400).json({ error: "Custom frame belum paid/verified" });
+
+  const targetPhone = normalizePhone(item.noWhatsapp || item.customerWhatsapp);
+  if (targetPhone.length < 10) return res.status(400).json({ error: "Nomor WhatsApp customer kosong atau tidak valid" });
+
+  const payload = {
+    requestId: snap.id,
+    publicRequestId: cleanString(item.publicRequestId || snap.id),
+    namaPemesan: cleanString(item.namaPemesan),
+    noWhatsapp: cleanString(item.noWhatsapp),
+    branchName: cleanString(item.branchName),
+    branchCode: cleanString(item.branchCode),
+    boothName: cleanString(item.boothName),
+    tanggalPemakaian: cleanString(item.tanggalPemakaian),
+    perkiraanJamKedatangan: cleanString(item.perkiraanJamKedatangan),
+    productTitle: cleanString(item.productTitle),
+    ukuranFrame: cleanString(item.ukuranFrame),
+    judulFrame: cleanString(item.judulFrame),
+    metodeEdit: cleanString(item.metodeEdit),
+    isExpress: Boolean(item.isExpress),
+    totalPrice: Number(item.totalPrice || 0),
+    pakasirTotalPayment: Number(item.pakasirTotalPayment || 0),
+    paymentStatus: cleanString(item.paymentStatus || "paid"),
+  };
+  const idempotencyKey = safeDocId(req.body?.idempotencyKey || `${snap.id}:${targetPhone}:paid`);
+  const deliveryId = `custom_frame.recap.send_whatsapp:${idempotencyKey}`;
+  const delivery = {
+    eventType: "custom_frame.recap.send_whatsapp",
+    sourceType: "custom_frame_request",
+    sourceId: snap.id,
+    targetType: "customer_private",
+    targetPhone,
+    messagePreview: buildCustomFrameRecapMessage({ payload, sourceId: snap.id }),
+    payload,
+    createdByName: cleanString(req.body?.createdByName || "waroengfoto.com"),
+  };
+
+  const result = await createDelivery({
+    deliveryId,
+    data: delivery,
+    sourcePatch: {
+      collection: CUSTOM_FRAME_COLLECTION,
+      id: snap.id,
+      data: (now, nextDeliveryId) => ({
+        customerRecapWhatsappStatus: "queued",
+        customerRecapWhatsappQueuedAt: now,
+        customerRecapWhatsappError: null,
+        customerRecapWhatsappDeliveryId: nextDeliveryId,
+        updatedAt: now,
+      }),
+    },
+  });
+  return res.status(200).json({ ok: true, ...result });
+}
+
 async function listRoutes(_req, res) {
   const db = getDb();
   const snaps = await db.collection(ROUTE_COLLECTION).get();
@@ -372,6 +443,7 @@ export function startApiServer() {
     queueCustomFrameSubmitted(req, res).catch((error) => handleError(res, error)),
   );
   app.post("/api/messages/studio-result", (req, res) => queueStudioResult(req, res).catch((error) => handleError(res, error)));
+  app.post("/api/messages/custom-frame-recap", (req, res) => queueCustomFrameRecap(req, res).catch((error) => handleError(res, error)));
   app.get("/api/settings/routes", (req, res) => listRoutes(req, res).catch((error) => handleError(res, error)));
   app.put("/api/settings/routes/:routeKey", (req, res) => updateRoute(req, res).catch((error) => handleError(res, error)));
 

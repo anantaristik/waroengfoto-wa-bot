@@ -2,6 +2,7 @@ import { CONFIG } from "./config.js";
 import { FieldValue, getDb } from "./firebase.js";
 import {
   buildBookingSettledGroupMessage,
+  buildCustomFrameRecapMessage,
   buildCustomFrameSubmittedGroupMessage,
   buildStudioPhotoResultMessage,
 } from "./formatters.js";
@@ -9,9 +10,11 @@ import { sendGroupMessage, sendPrivateMessage } from "./whatsapp.js";
 
 const EVENT_BOOKING_SETTLED = "booking.settled.notify_group";
 const EVENT_CUSTOM_FRAME_SUBMITTED = "custom_frame.submitted.notify_group";
+const EVENT_CUSTOM_FRAME_RECAP = "custom_frame.recap.send_whatsapp";
 const EVENT_STUDIO_PHOTO_RESULT = "studio_photo_result.send_whatsapp";
 const DELIVERY_COLLECTION = "wa_bot_deliveries";
 const BOOKING_COLLECTION = "studio_bookings";
+const CUSTOM_FRAME_COLLECTION = "custom_frame_requests";
 
 async function claimDelivery(db, doc) {
   const ref = doc.ref;
@@ -64,6 +67,19 @@ async function markBookingWhatsappStatus(db, delivery, status, patch = {}) {
   );
 }
 
+async function markCustomFrameWhatsappStatus(db, delivery, status, patch = {}) {
+  if (delivery.eventType !== EVENT_CUSTOM_FRAME_RECAP) return;
+  if (delivery.sourceType !== "custom_frame_request" || !delivery.sourceId) return;
+  await db.collection(CUSTOM_FRAME_COLLECTION).doc(delivery.sourceId).set(
+    {
+      customerRecapWhatsappStatus: status,
+      ...patch,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function markSent(db, delivery, messageId) {
   await db.collection(DELIVERY_COLLECTION).doc(delivery.id).set(
     {
@@ -79,6 +95,10 @@ async function markSent(db, delivery, messageId) {
     photoResultWhatsappSentAt: FieldValue.serverTimestamp(),
     photoResultWhatsappError: null,
   });
+  await markCustomFrameWhatsappStatus(db, delivery, "sent", {
+    customerRecapWhatsappSentAt: FieldValue.serverTimestamp(),
+    customerRecapWhatsappError: null,
+  });
 }
 
 async function markFailed(db, delivery, error) {
@@ -93,6 +113,9 @@ async function markFailed(db, delivery, error) {
   );
   await markBookingWhatsappStatus(db, delivery, "failed", {
     photoResultWhatsappError: message.slice(0, 1000),
+  });
+  await markCustomFrameWhatsappStatus(db, delivery, "failed", {
+    customerRecapWhatsappError: message.slice(0, 1000),
   });
 }
 
@@ -116,12 +139,21 @@ async function processCustomFrameSubmitted(client, delivery) {
   return sent?.id?._serialized || sent?.id?.id || null;
 }
 
+async function processCustomFrameRecap(client, delivery) {
+  const message = buildCustomFrameRecapMessage(delivery);
+  const sent = await sendPrivateMessage(client, delivery.targetPhone, message);
+  return sent?.id?._serialized || sent?.id?.id || null;
+}
+
 async function processDelivery(client, delivery) {
   if (delivery.eventType === EVENT_BOOKING_SETTLED) {
     return processBookingSettled(client, delivery);
   }
   if (delivery.eventType === EVENT_CUSTOM_FRAME_SUBMITTED) {
     return processCustomFrameSubmitted(client, delivery);
+  }
+  if (delivery.eventType === EVENT_CUSTOM_FRAME_RECAP) {
+    return processCustomFrameRecap(client, delivery);
   }
   if (delivery.eventType === EVENT_STUDIO_PHOTO_RESULT) {
     return processStudioPhotoResult(client, delivery);

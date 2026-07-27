@@ -76,7 +76,7 @@ export function buildCustomFrameSubmittedGroupMessage(delivery) {
   const express = payload.isExpress ? "Express" : "Bukan Express";
 
   return [
-    "Custom Frame Baru - Payment Submitted",
+    "Custom Frame Baru - Payment Verified",
     "",
     `ID: ${shortCustomFrameId(code)} (${code || "-"})`,
     `Judul: ${payload.judulFrame || "-"}`,
@@ -90,4 +90,31 @@ export function buildCustomFrameSubmittedGroupMessage(delivery) {
     "",
     `Detail: /cf-detail-${shortCustomFrameId(code)}`,
   ].join("\n");
+}
+
+export function buildCustomFrameRecapMessage(delivery) {
+  const payload = delivery.payload || {};
+  const customerName = String(payload.namaPemesan || payload.customerName || "Kak").trim() || "Kak";
+  const code = payload.publicRequestId || payload.requestId || delivery.sourceId || "-";
+  const method = payload.metodeEdit === "DIEDIT_WAROENGFOTO" ? "Diedit Waroeng Foto" : "Edit sendiri";
+  const express = payload.isExpress ? "Ya" : "Tidak";
+
+  return [
+    `Halo ${customerName},`,
+    "",
+    "Pembayaran custom frame kamu sudah terverifikasi ya.",
+    "",
+    "REKAP CUSTOM FRAME",
+    `ID: ${shortCustomFrameId(code)} (${code})`,
+    `Judul: ${payload.judulFrame || "-"}`,
+    `Cabang: ${payload.branchName || payload.branchCode || "-"}`,
+    payload.boothName ? `Booth: ${payload.boothName}` : "",
+    `Tanggal pakai: ${formatSchedule(payload.tanggalPemakaian, payload.perkiraanJamKedatangan, "")}`,
+    `Produk: ${payload.productTitle || payload.ukuranFrame || "-"}`,
+    `Metode: ${method}`,
+    `Express: ${express}`,
+    `Total pembayaran: ${formatRupiah(payload.pakasirTotalPayment || payload.totalPrice)}`,
+    "",
+    "Tim Waroeng Foto akan menyiapkan frame sesuai data yang kamu submit. Simpan pesan ini sebagai rekap pesananmu ya.",
+  ].filter(Boolean).join("\n");
 }
