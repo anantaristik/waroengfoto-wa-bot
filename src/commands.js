@@ -7,7 +7,7 @@ import {
   listTodayCustomFrames,
   listUpcomingCustomFrames,
 } from "./queries.js";
-import { AUTO_GROUP_ROUTES, buildGroupRegistrationWrites } from "./groupRegistration.js";
+import { AUTO_GROUP_ROUTES, buildGroupRegistrationWrites, fallbackGroupChat } from "./groupRegistration.js";
 
 const GROUP_COLLECTION = "wa_bot_groups";
 const ROUTE_COLLECTION = "wa_bot_notification_routes";
@@ -65,7 +65,7 @@ function helpText() {
 }
 
 async function registerGroup(message) {
-  const chat = await getMessageChat(message);
+  const chat = await getMessageChat(message, { allowGroupFallback: true });
   if (!chat.isGroup) return "Command /register hanya untuk grup.";
 
   const db = getDb();
@@ -100,7 +100,7 @@ async function syncGroupInbox(message, rawText) {
   const chatId = getMessageChatId(message);
   if (!chatId.endsWith("@g.us")) return;
 
-  const chat = await getMessageChat(message);
+  const chat = await getMessageChat(message, { allowGroupFallback: true });
   if (!chat?.isGroup) return;
 
   const db = getDb();
@@ -140,12 +140,36 @@ function getMessageChatId(message) {
   return String(message.fromMe ? message.to : message.from || "");
 }
 
-async function getMessageChat(message) {
+async function getMessageChat(message, options = {}) {
   const chatId = getMessageChatId(message);
+  const attempts = [];
+
   if (message.fromMe && chatId && message.client?.getChatById) {
-    return message.client.getChatById(chatId);
+    attempts.push(() => message.client.getChatById(chatId));
   }
-  return message.getChat();
+  if (message.getChat) {
+    attempts.push(() => message.getChat());
+  }
+  if (!message.fromMe && chatId && message.client?.getChatById) {
+    attempts.push(() => message.client.getChatById(chatId));
+  }
+
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const fallback = options.allowGroupFallback ? fallbackGroupChat(chatId, message) : null;
+  if (fallback) {
+    console.warn("Using fallback WhatsApp group chat data", { chatId });
+    return fallback;
+  }
+
+  throw lastError || new Error("Unable to resolve WhatsApp chat");
 }
 
 async function canAccessMessageCommand(message, commandKey) {

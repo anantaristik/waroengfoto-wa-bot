@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildGroupRegistrationWrites } from "../src/groupRegistration.js";
+import { buildGroupRegistrationWrites, fallbackGroupChat } from "../src/groupRegistration.js";
 
 test("/register writes default notification routes for the group", () => {
   const now = { sentinel: "serverTimestamp" };
@@ -23,4 +23,14 @@ test("/register writes default notification routes for the group", () => {
   assert.equal(routes.get("custom_frame_submitted").groupId, "120363000000000000@g.us");
   assert.equal(routes.get("custom_frame_submitted").updatedBy, "/register");
   assert.equal(routes.get("booking_settled").groupId, "120363000000000000@g.us");
+});
+
+test("/register can fall back to message group id when WhatsApp chat lookup fails", () => {
+  const chat = fallbackGroupChat("120363111111111111@g.us", {
+    _data: { notifyName: "CUSTOM FRAME" },
+  });
+
+  assert.equal(chat.isGroup, true);
+  assert.equal(chat.id._serialized, "120363111111111111@g.us");
+  assert.equal(chat.name, "CUSTOM FRAME");
 });
