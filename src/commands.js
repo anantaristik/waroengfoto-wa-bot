@@ -1,10 +1,13 @@
 import { canRunCommand } from "./access.js";
 import { FieldValue, getDb } from "./firebase.js";
 import {
+  getBookingDetailBySuffix,
   getCustomFrameDetailBySuffix,
+  listBookingsByDate,
   listCustomFramesByDate,
   listTodayBookings,
   listTodayCustomFrames,
+  listUpcomingBookings,
   listUpcomingCustomFrames,
 } from "./queries.js";
 import { AUTO_GROUP_ROUTES, buildGroupRegistrationWrites, fallbackGroupChat } from "./groupRegistration.js";
@@ -22,6 +25,9 @@ function normalizeSenderId(value) {
 
 function getCommandKey(command, arg) {
   if (command === "/bk" && arg === "today") return "booking:list";
+  if (command === "/bk" && /^\d{6}$/.test(arg)) return "booking:list";
+  if (command === "/bk" && ["next", "upcoming", "soon"].includes(arg)) return "booking:list";
+  if (command.startsWith("/bk-detail-")) return "booking:list";
   if (command === "/cf" && arg === "today") return "custom_frame:list";
   if (command === "/cf" && /^\d{6}$/.test(arg)) return "custom_frame:list";
   if (command === "/cf" && ["next", "upcoming", "soon"].includes(arg)) return "custom_frame:list";
@@ -52,15 +58,22 @@ function helpText() {
   return [
     "Waroeng Foto Bot siap bantu.",
     "",
-    "Command yang tersedia:",
-    "/bk today - lihat booking studio hari ini",
-    "/cf today - lihat custom frame hari ini",
-    "/cf next - lihat 10 custom frame selanjutnya",
-    "/cf ddmmyy - lihat custom frame di tanggal tertentu, contoh /cf 020626",
-    "/cf-detail-[kode] - buka detail custom frame dari kode ID",
-    "/register - daftarkan grup ini sebagai tujuan bot",
+    "BOOKING STUDIO",
+    "/bk today - list booking hari ini",
+    "/bk next - 10 booking terdekat dari hari ini",
+    "/bk ddmmyy - list booking tanggal tertentu, contoh /bk 020626",
+    "/bk-detail-[kode] - detail booking dari kode pendek di list",
     "",
-    "Akses command dibatasi untuk nomor staf yang sudah diizinkan.",
+    "CUSTOM FRAME",
+    "/cf today - list custom frame hari ini",
+    "/cf next - 10 custom frame terdekat dari hari ini",
+    "/cf ddmmyy - list custom frame tanggal tertentu, contoh /cf 020626",
+    "/cf-detail-[kode] - detail custom frame dari kode pendek di list",
+    "",
+    "SETTING GRUP",
+    "/register - daftarkan grup ini sebagai tujuan notifikasi otomatis",
+    "",
+    "Catatan: command hanya dibalas untuk nomor staf yang sudah diizinkan.",
   ].join("\n");
 }
 
@@ -222,6 +235,24 @@ export async function handleIncomingMessage(message) {
   }
 
   if (commandKey === "booking:list") {
+    if (command.startsWith("/bk-detail-")) {
+      const code = commandRaw.slice("/bk-detail-".length);
+      await message.reply(await getBookingDetailBySuffix(code));
+      return;
+    }
+    if (["next", "upcoming", "soon"].includes(arg)) {
+      await message.reply(await listUpcomingBookings());
+      return;
+    }
+    if (/^\d{6}$/.test(arg)) {
+      const date = parseDdmmyy(arg);
+      if (!date) {
+        await message.reply("Format tanggal belum valid. Pakai /bk ddmmyy, contoh /bk 020626.");
+        return;
+      }
+      await message.reply(await listBookingsByDate(date));
+      return;
+    }
     await message.reply(await listTodayBookings());
     return;
   }

@@ -3,19 +3,11 @@ import { formatDateLongID, getTodayInTimezone } from "./time.js";
 
 const BOOKING_COLLECTION = "studio_bookings";
 const CUSTOM_FRAME_COLLECTION = "custom_frame_requests";
+const BOOKING_LOOKUP_LIMIT = 250;
 const CUSTOM_FRAME_LOOKUP_LIMIT = 250;
 
 function formatTimeRange(item) {
   return [item.startTime, item.endTime].filter(Boolean).join("-") || "-";
-}
-
-function compactBookingLine(item, index) {
-  const code = item.publicBookingCode || item.bookingId || item.id || "-";
-  const customer = item.customerName || "-";
-  const product = item.productName || item.productId || "-";
-  const branch = item.branchName || item.branchCode || item.branchId || "-";
-  const status = [item.paymentStatus, item.bookingStatus].filter(Boolean).join("/");
-  return `${index + 1}. ${code}\n${customer} • ${product}\n${branch} • ${formatTimeRange(item)} • ${status || "-"}`;
 }
 
 function formatArrivalTime(value) {
@@ -83,12 +75,16 @@ function customFrameCode(item) {
   return String(item.publicRequestId || item.requestId || item.id || "").trim();
 }
 
+function bookingCode(item) {
+  return String(item.publicBookingCode || item.bookingId || item.id || "").trim();
+}
+
 function suffixForCode(code, length) {
   return String(code || "").replace(/\s/g, "").slice(-length).toLowerCase();
 }
 
-function uniqueSuffixes(items, minLength = 4) {
-  const codes = items.map(customFrameCode);
+function uniqueSuffixes(items, minLength = 4, getCode = customFrameCode) {
+  const codes = items.map(getCode);
   const suffixLengths = new Map();
 
   codes.forEach((code) => {
@@ -103,6 +99,52 @@ function uniqueSuffixes(items, minLength = 4) {
   });
 
   return new Map(codes.map((code) => [code, suffixForCode(code, suffixLengths.get(code) || minLength)]));
+}
+
+function bookingDate(item) {
+  return item.bookingDate || item.date || "";
+}
+
+function bookingStatus(item) {
+  return normalizeStatus(item.bookingStatus || item.status);
+}
+
+function paymentStatus(item) {
+  return normalizeStatus(item.paymentStatus || item.payment_status);
+}
+
+function bookingCustomerWhatsapp(item) {
+  return item.customerWhatsapp || item.whatsapp || item.phone || item.phoneNumber || "-";
+}
+
+function bookingTotal(item) {
+  return item.totalPayment || item.pakasirTotalPayment || item.amount || item.total || item.totalPrice || 0;
+}
+
+function compactBookingLine(item, index, suffixByCode) {
+  const code = bookingCode(item);
+  const shortCode = suffixByCode?.get(code) || suffixForCode(code, 4) || "-";
+  const customer = item.customerName || item.name || "-";
+  const branch = item.branchCode || item.branchName || item.branchId || "-";
+  const product = item.productName || item.packageName || item.productId || "-";
+  const status = [bookingStatus(item), paymentStatus(item)].filter((value) => value && value !== "-").join(" / ");
+
+  return [
+    `${index + 1}. [${shortCode}] ${code || "-"}`,
+    `   Customer: ${customer}`,
+    `   Cabang: ${branch}`,
+    `   Jadwal: ${formatDateLongID(bookingDate(item))}, ${formatTimeRange(item)}`,
+    `   Paket: ${product}`,
+    item.backgroundName ? `   Background: ${item.backgroundName}` : "",
+    `   Status: ${status || "-"}`,
+    `   Detail: /bk-detail-${shortCode}`,
+  ].filter(Boolean).join("\n");
+}
+
+function formatBookingList(title, items) {
+  if (!items.length) return `${title}\n\nBelum ada booking studio.`;
+  const suffixByCode = uniqueSuffixes(items, 4, bookingCode);
+  return [`*${title}*`, `Total: ${items.length} booking`, "", ...items.map((item, index) => compactBookingLine(item, index, suffixByCode))].join("\n\n");
 }
 
 function compactCustomFrameLine(item, index, suffixByCode) {
@@ -143,6 +185,14 @@ function sortCustomFrames(items) {
     return String(a.perkiraanJamKedatangan || a.startTime || "").localeCompare(
       String(b.perkiraanJamKedatangan || b.startTime || ""),
     );
+  });
+}
+
+function sortBookings(items) {
+  return items.sort((a, b) => {
+    const dateDiff = String(bookingDate(a)).localeCompare(String(bookingDate(b)));
+    if (dateDiff) return dateDiff;
+    return String(a.startTime || "").localeCompare(String(b.startTime || ""));
   });
 }
 
@@ -226,20 +276,93 @@ function formatAmbiguousCustomFrameDetail(suffix, matches) {
   return lines.join("\n");
 }
 
+function formatBookingDetail(item, duplicateCount = 0) {
+  const code = bookingCode(item) || item.id || "-";
+  const lines = [
+    `ID Booking: ${code}`,
+    "",
+    "DATA CUSTOMER",
+    `Nama: ${item.customerName || item.name || "-"}`,
+    `WhatsApp: ${bookingCustomerWhatsapp(item)}`,
+    item.customerEmail || item.email ? `Email: ${item.customerEmail || item.email}` : "",
+    "",
+    "DETAIL BOOKING",
+    `Cabang: ${item.branchName || item.branchCode || item.branchId || "-"}`,
+    `Paket: ${item.productName || item.packageName || item.productId || "-"}`,
+    item.backgroundName ? `Background: ${item.backgroundName}` : "",
+    `Tanggal booking: ${formatDateLongID(bookingDate(item))}`,
+    `Jam: ${formatTimeRange(item)}`,
+    `Status booking: ${bookingStatus(item)}`,
+    `Status payment: ${paymentStatus(item)}`,
+    "",
+    "RINCIAN PEMBAYARAN",
+    `Total: ${formatRupiah(bookingTotal(item))}`,
+    item.paymentMethod ? `Metode: ${item.paymentMethod}` : "",
+    item.pakasirTransactionId || item.transactionId ? `Ref payment: ${item.pakasirTransactionId || item.transactionId}` : "",
+  ].filter(Boolean);
+
+  const resultLink = item.photoResultDriveLink || item.resultLink || "";
+  if (resultLink || item.photoResultWhatsappStatus || item.photoResultStatus) {
+    lines.push("");
+    lines.push("HASIL FOTO");
+    if (resultLink) lines.push(`Link Drive: ${resultLink}`);
+    lines.push(`Status WA: ${item.photoResultWhatsappStatus || "-"}`);
+    lines.push(`Status hasil: ${item.photoResultStatus || "-"}`);
+  }
+
+  if (duplicateCount > 1) {
+    lines.push("");
+    lines.push(`Catatan: kode pendek ini cocok dengan ${duplicateCount} booking. Pakai kode yang lebih panjang dari ID list jika perlu.`);
+  }
+  return lines.join("\n");
+}
+
+function formatAmbiguousBookingDetail(suffix, matches) {
+  const suffixByCode = uniqueSuffixes(matches, suffix.length + 1, bookingCode);
+  const lines = [
+    `Kode ${suffix} cocok dengan ${matches.length} booking.`,
+    "Pakai kode yang lebih panjang dari salah satu booking ini:",
+    "",
+    ...matches.slice(0, 10).map((item, index) => {
+      const code = bookingCode(item);
+      const shortCode = suffixByCode.get(code) || suffixForCode(code, suffix.length + 1);
+      return `${index + 1}. ${formatDateLongID(bookingDate(item))} ${formatTimeRange(item)} - ${
+        item.customerName || "-"
+      }, ${item.productName || item.packageName || "-"}\nID: ${shortCode}`;
+    }),
+  ];
+  return lines.join("\n");
+}
+
 export async function listTodayBookings() {
+  const today = getTodayInTimezone();
+  return listBookingsByDate(today, `Booking Studio Hari Ini - ${formatDateLongID(today)}`);
+}
+
+export async function listBookingsByDate(date, title = `Booking Studio - ${formatDateLongID(date)}`) {
+  const db = getDb();
+  const snap = await db
+    .collection(BOOKING_COLLECTION)
+    .where("bookingDate", "==", date)
+    .limit(20)
+    .get();
+  const items = sortBookings(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+
+  return formatBookingList(title, items);
+}
+
+export async function listUpcomingBookings() {
   const db = getDb();
   const today = getTodayInTimezone();
   const snap = await db
     .collection(BOOKING_COLLECTION)
-    .where("bookingDate", "==", today)
-    .limit(20)
+    .where("bookingDate", ">=", today)
+    .orderBy("bookingDate", "asc")
+    .limit(10)
     .get();
-  const items = snap.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .sort((a, b) => String(a.startTime || "").localeCompare(String(b.startTime || "")));
+  const items = sortBookings(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
 
-  if (!items.length) return `Booking hari ini (${today})\n\nBelum ada booking.`;
-  return [`Booking hari ini (${today})`, "", ...items.map(compactBookingLine)].join("\n\n");
+  return formatBookingList(`Booking Studio Selanjutnya - mulai ${formatDateLongID(today)}`, items);
 }
 
 export async function listTodayCustomFrames() {
@@ -299,4 +422,29 @@ export async function getCustomFrameDetailBySuffix(rawSuffix) {
   }
   if (matches.length > 1) return formatAmbiguousCustomFrameDetail(suffix, matches);
   return formatCustomFrameDetail(matches[0]);
+}
+
+export async function getBookingDetailBySuffix(rawSuffix) {
+  const suffix = String(rawSuffix || "").trim().toLowerCase();
+  if (suffix.length < 4) return "Kode detail minimal 4 karakter. Contoh: /bk-detail-a1b2";
+
+  const db = getDb();
+  const today = getTodayInTimezone();
+  const snap = await db
+    .collection(BOOKING_COLLECTION)
+    .where("bookingDate", ">=", today)
+    .orderBy("bookingDate", "asc")
+    .limit(BOOKING_LOOKUP_LIMIT)
+    .get();
+  const matches = sortBookings(
+    snap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((item) => bookingCode(item).toLowerCase().endsWith(suffix)),
+  );
+
+  if (!matches.length) {
+    return `Booking dengan kode ${suffix} belum ditemukan di booking hari ini dan berikutnya.`;
+  }
+  if (matches.length > 1) return formatAmbiguousBookingDetail(suffix, matches);
+  return formatBookingDetail(matches[0]);
 }
