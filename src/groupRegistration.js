@@ -9,7 +9,7 @@ export function fallbackGroupChat(chatId, message = {}) {
   return {
     isGroup: true,
     id: { _serialized: chatId },
-    name: message._data?.chatName || message._data?.notifyName || "",
+    name: message._data?.chatName || "",
     participants: null,
   };
 }

@@ -27,10 +27,18 @@ test("/register writes default notification routes for the group", () => {
 
 test("/register can fall back to message group id when WhatsApp chat lookup fails", () => {
   const chat = fallbackGroupChat("120363111111111111@g.us", {
-    _data: { notifyName: "CUSTOM FRAME" },
+    _data: { chatName: "CUSTOM FRAME", notifyName: "Ananta" },
   });
 
   assert.equal(chat.isGroup, true);
   assert.equal(chat.id._serialized, "120363111111111111@g.us");
   assert.equal(chat.name, "CUSTOM FRAME");
+});
+
+test("/register fallback does not use sender notify name as group name", () => {
+  const chat = fallbackGroupChat("120363222222222222@g.us", {
+    _data: { notifyName: "Ananta" },
+  });
+
+  assert.equal(chat.name, "");
 });
