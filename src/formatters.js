@@ -31,6 +31,10 @@ function shortCustomFrameId(value) {
   return String(value || "").trim().slice(-4).toLowerCase() || "-";
 }
 
+function customFrameDisplayCode(payload, sourceId) {
+  return String(payload.publicRequestCode || payload.publicRequestId || payload.requestId || sourceId || "-").trim();
+}
+
 export function buildStudioPhotoResultMessage(delivery) {
   const payload = delivery.payload || {};
   const customerName = String(payload.customerName || "Kak").trim() || "Kak";
@@ -71,14 +75,14 @@ export function buildBookingSettledGroupMessage(delivery) {
 
 export function buildCustomFrameSubmittedGroupMessage(delivery) {
   const payload = delivery.payload || {};
-  const code = payload.publicRequestId || payload.requestId || delivery.sourceId || "";
+  const code = customFrameDisplayCode(payload, delivery.sourceId);
   const method = payload.metodeEdit === "DIEDIT_WAROENGFOTO" ? "Diedit Waroeng Foto" : "Edit sendiri";
   const express = payload.isExpress ? "Express" : "Bukan Express";
 
   return [
     "Custom Frame Baru - Payment Verified",
     "",
-    `ID: ${shortCustomFrameId(code)} (${code || "-"})`,
+    `Kode: ${code}`,
     `Judul: ${payload.judulFrame || "-"}`,
     `Customer: ${payload.namaPemesan || payload.customerName || "-"}`,
     `WhatsApp: ${payload.noWhatsapp || payload.customerWhatsapp || "-"}`,
@@ -95,7 +99,7 @@ export function buildCustomFrameSubmittedGroupMessage(delivery) {
 export function buildCustomFrameRecapMessage(delivery) {
   const payload = delivery.payload || {};
   const customerName = String(payload.namaPemesan || payload.customerName || "Kak").trim() || "Kak";
-  const code = payload.publicRequestId || payload.requestId || delivery.sourceId || "-";
+  const code = customFrameDisplayCode(payload, delivery.sourceId);
   const method = payload.metodeEdit === "DIEDIT_WAROENGFOTO" ? "Diedit Waroeng Foto" : "Edit sendiri";
   const express = payload.isExpress ? "Ya" : "Tidak";
 
@@ -105,7 +109,7 @@ export function buildCustomFrameRecapMessage(delivery) {
     "Pembayaran custom frame kamu sudah terverifikasi ya.",
     "",
     "REKAP CUSTOM FRAME",
-    `ID: ${shortCustomFrameId(code)} (${code})`,
+    `Kode: ${code}`,
     `Judul: ${payload.judulFrame || "-"}`,
     `Cabang: ${payload.branchName || payload.branchCode || "-"}`,
     payload.boothName ? `Booth: ${payload.boothName}` : "",

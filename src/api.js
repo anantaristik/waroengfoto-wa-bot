@@ -227,6 +227,7 @@ async function queueCustomFrameSubmitted(req, res) {
 
   const payload = {
     requestId: snap.id,
+    publicRequestCode: cleanString(item.publicRequestCode),
     publicRequestId: cleanString(item.publicRequestId || snap.id),
     namaPemesan: cleanString(item.namaPemesan),
     noWhatsapp: cleanString(item.noWhatsapp),
@@ -339,6 +340,7 @@ async function queueCustomFrameRecap(req, res) {
 
   const payload = {
     requestId: snap.id,
+    publicRequestCode: cleanString(item.publicRequestCode),
     publicRequestId: cleanString(item.publicRequestId || snap.id),
     namaPemesan: cleanString(item.namaPemesan),
     noWhatsapp: cleanString(item.noWhatsapp),

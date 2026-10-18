@@ -72,7 +72,7 @@ function customFrameExpressLabel(item) {
 }
 
 function customFrameCode(item) {
-  return String(item.publicRequestId || item.requestId || item.id || "").trim();
+  return String(item.publicRequestCode || item.publicRequestId || item.requestId || item.id || "").trim();
 }
 
 function bookingCode(item) {
