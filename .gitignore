@@ -1,9 +1,0 @@
-.env
-.env.*
-node_modules/
-session/
-logs/
-*.log
-service-account*.json
-firebase-service-account*.json
-
